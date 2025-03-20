@@ -823,6 +823,11 @@ app.get('/download-pdf/:contactId', async (req, res) => {
     res.status(500).json({ error: 'Failed to download PDF report: ' + error.message });
   }
 });
+// Listen on the port assigned by Railway
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
 // Export the Express API
 module.exports = app;
