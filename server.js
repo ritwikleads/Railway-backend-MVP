@@ -5,8 +5,20 @@ const axios = require('axios');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// Configure CORS with specific options
+const corsOptions = {
+  origin: ['https://app.nubizdigital.com', 'http://localhost:3000'], // Add your frontend origins
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Apply CORS middleware with options
+app.use(cors(corsOptions));
+
+// Apply other middleware
 app.use(bodyParser.json());
 
 // Function to call Google Solar API
@@ -370,6 +382,23 @@ app.post('/', async (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).send('Server is running');
+});
+
+// Add a special handler for OPTIONS requests (preflight)
+app.options('*', cors(corsOptions));
+
+// Handle all routes that might not exist to ensure CORS headers are set
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', corsOptions.origin);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  
+  next();
 });
 
 // Export the Express API
