@@ -6,21 +6,42 @@ const axios = require('axios');
 const app = express();
 
 // Configure CORS with specific options
+// Get allowed origins from environment variable or use defaults
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : ['https://app.nubizdigital.com'];
+
+// Simple CORS configuration that's similar to the working version
 const corsOptions = {
-  origin: [
-    'https://app.nubizdigital.com',
-    'http://localhost:3000',
-    'http://localhost:8000',
-    'https://staging.nubizdigital.com',
-    'https://test.nubizdigital.com'
-    // Add any other domains as needed
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  origin: function(origin, callback) {
+    // Allow all origins if no specific origins defined
+    if (allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    
+    // Allow requests with no origin (like mobile apps or postman)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`Origin ${origin} not allowed by CORS`);
+      callback(null, false);
+    }
+  },
+  credentials: true
 };
+
+// Apply CORS middleware with options
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
+// Apply other middleware
+app.use(bodyParser.json());
 
 // Apply CORS middleware with options
 app.use(cors(corsOptions));
@@ -396,10 +417,13 @@ app.options('*', cors(corsOptions));
 
 // Handle all routes that might not exist to ensure CORS headers are set
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', corsOptions.origin);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes('*') || (origin && allowedOrigins.includes(origin))) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
   
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
