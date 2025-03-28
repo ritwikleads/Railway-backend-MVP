@@ -5,46 +5,39 @@ const axios = require('axios');
 
 const app = express();
 
-// Configure CORS with specific options
-// Get allowed origins from environment variable or use defaults
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',') 
-  : ['https://app.nubizdigital.com'];
+// Debug middleware to check if our middleware is running
+app.use((req, res, next) => {
+  console.log(`Received ${req.method} request to ${req.path} from origin: ${req.headers.origin}`);
+  next();
+});
 
-// Simple CORS configuration that's similar to the working version
-const corsOptions = {
-  origin: function(origin, callback) {
-    // Allow all origins if no specific origins defined
-    if (allowedOrigins.includes('*')) {
-      return callback(null, true);
-    }
-    
-    // Allow requests with no origin (like mobile apps or postman)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn(`Origin ${origin} not allowed by CORS`);
-      callback(null, false);
-    }
-  },
-  credentials: true
-};
+// ===== CORS CONFIGURATION =====
+// 1. Set CORS as the very first middleware (before any other middleware)
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  credentials: true,
+  preflightContinue: false
+}));
 
-// Apply CORS middleware with options
-app.use(cors(corsOptions));
+// 2. Handle preflight requests for all routes
+app.options('*', (req, res) => {
+  console.log('Handling OPTIONS preflight request');
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  res.sendStatus(200);
+});
 
-// Handle preflight requests explicitly
-app.options('*', cors(corsOptions));
-
-// Apply other middleware
-app.use(bodyParser.json());
-
-// Apply CORS middleware with options
-app.use(cors(corsOptions));
+// 3. Add CORS headers to all responses
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
+});
 
 // Apply other middleware
 app.use(bodyParser.json());
@@ -57,8 +50,6 @@ async function callGoogleSolarApi(latitude, longitude, apiKey) {
     console.log(`Calling Google Solar API with URL: ${apiUrl}`);
     
     const response = await axios.get(apiUrl);
-    //console.log('Google Solar API Response:', JSON.stringify(response.data, null, 2));
-    
     return response.data;
   } catch (error) {
     console.error('Error calling Google Solar API:', error.message);
@@ -66,38 +57,6 @@ async function callGoogleSolarApi(latitude, longitude, apiKey) {
       console.error('API Response Error:', error.response.data);
     }
     return null;
-  }
-}
-
-// Function to download GeoTIFF file from URL
-async function downloadGeoTiff(geoTiffUrl, apiKey) {
-  try {
-    // Extract the ID from the URL
-    const idMatch = geoTiffUrl.match(/id=([^&]+)/);
-    if (!idMatch || !idMatch[1]) {
-      throw new Error('Invalid GeoTIFF URL format');
-    }
-    
-    const id = idMatch[1];
-    const downloadUrl = `https://solar.googleapis.com/v1/geoTiff:get?id=${id}&key=${apiKey}`;
-    
-    console.log(`Downloading GeoTIFF from: ${downloadUrl}`);
-    
-    // Set responseType to arraybuffer to get binary data
-    const response = await axios.get(downloadUrl, {
-      responseType: 'arraybuffer'
-    });
-  
-  return {
-      data: response.data,
-      contentType: response.headers['content-type']
-    };
-  } catch (error) {
-    console.error('Error downloading GeoTIFF:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-    }
-    throw error;
   }
 }
 
@@ -288,12 +247,22 @@ async function sendToN8nWebhook(data, webhookUrl) {
 
 // Root endpoint for basic status check
 app.get('/', (req, res) => {
+  // Add CORS headers explicitly for this endpoint
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
   res.status(200).json({ status: 'Solar API server is running' });
 });
 
 // Main endpoint to receive form data
 app.post('/', async (req, res) => {
   try {
+    // Add CORS headers explicitly for this endpoint
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
     console.log('Received data:', JSON.stringify(req.body, null, 2));
     
     // Validate request body
@@ -409,27 +378,18 @@ app.post('/', async (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+  // Add CORS headers explicitly for this endpoint
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
   res.status(200).send('Server is running');
 });
 
-// Add a special handler for OPTIONS requests (preflight)
-app.options('*', cors(corsOptions));
-
-// Handle all routes that might not exist to ensure CORS headers are set
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes('*') || (origin && allowedOrigins.includes(origin))) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.header('Access-Control-Allow-Credentials', 'true');
-  }
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-  
-  next();
+// Listen on the port assigned by Railway
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 // Export the Express API
