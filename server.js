@@ -219,6 +219,33 @@ function processSolarApiResponse(apiResponse, userMonthlyBill) {
   }
 }
 
+// Function to send data to the n8n webhook
+async function sendToN8nWebhook(data, webhookUrl) {
+  try {
+    console.log(`Sending data to n8n webhook: ${webhookUrl}`);
+    
+    const response = await axios.post(webhookUrl, data);
+    
+    console.log('n8n webhook response status:', response.status);
+    
+    return {
+      success: true,
+      statusCode: response.status
+    };
+  } catch (error) {
+    console.error('Error sending data to n8n webhook:', error.message);
+    if (error.response) {
+      console.error('Webhook Response Error:', error.response.status);
+      console.error('Webhook Response Data:', error.response.data);
+    }
+    return {
+      success: false,
+      error: error.message,
+      statusCode: error.response?.status
+    };
+  }
+}
+
 // Root endpoint for basic status check
 app.get('/', (req, res) => {
   res.status(200).json({ status: 'Solar API server is running' });
@@ -263,6 +290,13 @@ app.post('/', async (req, res) => {
         error: 'Google API key is not configured'
       });
     }
+
+    // Get the n8n webhook URL from environment variables
+    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+    
+    if (!n8nWebhookUrl) {
+      console.warn('N8N webhook URL is not configured. Data will not be sent to n8n.');
+    }
     
     // Call Google Solar API for building insights
     const buildingInsightsResponse = await callGoogleSolarApi(
@@ -281,7 +315,7 @@ app.post('/', async (req, res) => {
     const processedData = processSolarApiResponse(buildingInsightsResponse, monthlyElectricityBill);
     
     // Combine all data into a single response
-    const response = {
+    const combinedData = {
       // Solar calculation results
       ...processedData,
       
@@ -303,11 +337,28 @@ app.post('/', async (req, res) => {
       propertyInfo: {
         isOwner: propertyInfo.isOwner,
         monthlyElectricityBill: monthlyElectricityBill
-      }
+      },
+      
+      // Add timestamp
+      timestamp: new Date().toISOString()
     };
     
+    // Send the combined data to the n8n webhook if configured
+    let webhookResult = null;
+    if (n8nWebhookUrl) {
+      webhookResult = await sendToN8nWebhook(combinedData, n8nWebhookUrl);
+      
+      // Add webhook result to the response
+      combinedData.webhookResult = webhookResult;
+    } else {
+      combinedData.webhookResult = {
+        success: false,
+        error: 'N8N webhook URL not configured'
+      };
+    }
+    
     // Return the combined response
-    return res.status(200).json(response);
+    return res.status(200).json(combinedData);
   } catch (error) {
     console.error('Error processing request:', error);
     return res.status(500).json({ 
