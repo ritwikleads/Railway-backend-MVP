@@ -7,7 +7,14 @@ const app = express();
 
 // Configure CORS with specific options
 const corsOptions = {
-  origin: ['https://app.nubizdigital.com', 'http://localhost:3000'], // Add your frontend origins
+  origin: [
+    'https://app.nubizdigital.com',
+    'http://localhost:3000',
+    'http://localhost:8000',
+    'https://staging.nubizdigital.com',
+    'https://test.nubizdigital.com'
+    // Add any other domains as needed
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
